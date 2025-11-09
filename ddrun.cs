@@ -8,15 +8,15 @@ public class _ : BasePlugin
 {
     public override string ModuleName => "DDRun";
     public override string ModuleAuthor => "Fi4";
-    public override string ModuleVersion => "0.2";
+    public override string ModuleVersion => "0.3";
 
     private static readonly byte ServerTickRate = 64;
-    private const float DuckHeight = 17.5f;
+    private const float DuckHeight = 18f;
     private const float PlayerHeight = 72;
     private const float NormalDuckSpeed = 6.023437f; //6.023437f
     private List<CCSPlayerController> _players = null!;
     private readonly ulong[] _whenUserDuck = new ulong[64];
-    private readonly bool[] _isPlayerStandUp = new bool[64];
+    private readonly float[] _whenUserStartDdRun = new float[64];
 
     public override void Load(bool hotReload)
     {
@@ -30,7 +30,7 @@ public class _ : BasePlugin
         {
             if (id == null! || !id.IsValid) continue;
             var pawn = id.PlayerPawn.Value;
-            if (!id.PawnIsAlive || pawn == null || pawn.MovementServices == null || pawn.MoveType == MoveType_t.MOVETYPE_OBSOLETE) continue;
+            if (pawn == null || pawn.Health <= 0 || pawn.MovementServices == null || pawn.MoveType == MoveType_t.MOVETYPE_OBSOLETE) continue;
             var idMove = pawn.MovementServices;
             var isOnGround = pawn.OnGroundLastTick;
             var whenDuckButton = idMove.ButtonPressedCmdNumber[2];
@@ -44,10 +44,11 @@ public class _ : BasePlugin
                 case true when whenDuckButton != _whenUserDuck[id.Slot]:
                     ChangePlayerStatus();
                     var ddHeight = GiveTrueDdHeight(id);
-                    _isPlayerStandUp[id.Slot] = true;
+                    _whenUserStartDdRun[id.Slot] = Server.CurrentTime;
                     new CCSPlayer_MovementServices(idMove.Handle).Ducking = true;
                     Server.NextFrame(() =>
                     {
+                        if (pawn.MoveType == MoveType_t.MOVETYPE_OBSOLETE) return;
                         ChangePlayerStatus();
                         pawn.AbsVelocity.Z += ddHeight * ServerTickRate;
                         Server.NextFrame(() =>
@@ -55,10 +56,11 @@ public class _ : BasePlugin
                             ChangePlayerStatus();
                             Server.NextFrame(() =>
                             {
-                                pawn.AbsVelocity.Z += -ddHeight * ServerTickRate;
-                                ChangePlayerStatus();
                                 pawn.AbsVelocity.Z = 0;
-                                Server.NextFrame(() => _isPlayerStandUp[id.Slot] = false);
+                                Server.NextFrame(() =>
+                                {
+                                    pawn.AbsVelocity.Z += -ddHeight * 2;
+                                });
                             });
                         });
                     });
@@ -66,7 +68,7 @@ public class _ : BasePlugin
             }
 
             var duckSpeed = NormalDuckSpeed;
-            if (_isPlayerStandUp[id.Slot])
+            if (Server.CurrentTime - _whenUserStartDdRun[id.Slot] < 0.3f)
                 duckSpeed *= ServerTickRate;
 
             new CCSPlayer_MovementServices(idMove.Handle).DuckSpeed = duckSpeed;
@@ -83,7 +85,7 @@ public class _ : BasePlugin
     private float GiveTrueDdHeight(CCSPlayerController id)
     {
         var idPlayerPawn = id.PlayerPawn.Value;
-        float ddRunHeight = DuckHeight;
+        var ddRunHeight = DuckHeight;
         if(idPlayerPawn == null || idPlayerPawn.AbsOrigin == null) return ddRunHeight;
         var origin = idPlayerPawn.AbsOrigin!;
 
@@ -92,7 +94,7 @@ public class _ : BasePlugin
             if(pawnOnHead == null || pawnOnHead.AbsOrigin == null) continue;
             var originOnHead = pawnOnHead.AbsOrigin!;
             const float originTolerance = 32;
-            const float zTolerance = PlayerHeight + DuckHeight;
+            const float zTolerance = PlayerHeight + DuckHeight*2f;
 
             if (Math.Abs(originOnHead.X - origin.X) <= originTolerance
                 && Math.Abs(originOnHead.Y - origin.Y) <= originTolerance
