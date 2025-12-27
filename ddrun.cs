@@ -8,12 +8,13 @@ public class _ : BasePlugin
 {
     public override string ModuleName => "DDRun";
     public override string ModuleAuthor => "Fi4";
-    public override string ModuleVersion => "0.5";
+    public override string ModuleVersion => "0.5r";
 
     private const byte ServerTickRate = 64;
     private const float DuckHeight = 17.5f;
     private const float PlayerHeight = 72;
     private const float NormalDuckSpeed = 6.023437f; //6.023437f
+    private const float SgsTime = 0.15f;
     private List<CCSPlayerController> _players = null!;
     private readonly ulong[] _whenUserDuck = new ulong[64];
     private readonly float[] _whenUserStartDdRun = new float[64];
@@ -33,8 +34,22 @@ public class _ : BasePlugin
             if (pawn == null || pawn.Health <= 0 || pawn.MovementServices == null || pawn.MoveType == MoveType_t.MOVETYPE_OBSOLETE) continue;
             var idMove = pawn.MovementServices;
             var whenDuckButton = idMove.ButtonPressedCmdNumber[2];
-            var isOnGround = pawn.OnGroundLastTick;
-            switch (isOnGround)
+
+            var duckSpeed = NormalDuckSpeed;
+            if (Server.CurrentTime - _whenUserStartDdRun[id.Slot] < SgsTime*2 && _whenUserStartDdRun[id.Slot] - Server.CurrentTime < 0)
+            {
+                duckSpeed *= ServerTickRate;
+                if (((PlayerFlags)pawn.Flags & PlayerFlags.FL_DUCKING) == PlayerFlags.FL_DUCKING &&
+                    Server.CurrentTime - _whenUserStartDdRun[id.Slot] < SgsTime)
+                {
+                    pawn.AbsVelocity.Z += DuckHeight;
+                    _whenUserStartDdRun[id.Slot] -= SgsTime;
+                }
+            }
+
+            new CCSPlayer_MovementServices(idMove.Handle).DuckSpeed = duckSpeed;
+
+            switch (pawn.OnGroundLastTick)
             {
                 case false when whenDuckButton != _whenUserDuck[id.Slot]:
                 case true when (id.Buttons & PlayerButtons.Duck) != 0:
@@ -44,8 +59,8 @@ public class _ : BasePlugin
                 case true when whenDuckButton != _whenUserDuck[id.Slot]:
                     ChangePlayerStatus();
                     var ddHeight = GiveTrueDdHeight(id);
+                    _whenUserStartDdRun[id.Slot] = Server.CurrentTime + SgsTime;
                     new CCSPlayer_MovementServices(idMove.Handle).Ducking = true;
-                    _whenUserStartDdRun[id.Slot] = Server.CurrentTime + 0.1f;
                     var speedOld = Math.Round(pawn.AbsVelocity.Length2D());
                     Server.NextFrame(() =>
                     {
@@ -73,25 +88,12 @@ public class _ : BasePlugin
 
                     break;
             }
-
-            var duckSpeed = NormalDuckSpeed;
-            if (Server.CurrentTime - _whenUserStartDdRun[id.Slot] < 0.3f && _whenUserStartDdRun[id.Slot] - Server.CurrentTime < 0)
-            {
-                duckSpeed *= ServerTickRate;
-                if (((PlayerFlags)pawn.Flags & PlayerFlags.FL_DUCKING) == PlayerFlags.FL_DUCKING && Server.CurrentTime - _whenUserStartDdRun[id.Slot] < 0.15f)
-                {
-                    pawn.AbsVelocity.Z += DuckHeight;
-                    _whenUserStartDdRun[id.Slot] -= 0.15f;
-                }
-            }
-
-            new CCSPlayer_MovementServices(idMove.Handle).DuckSpeed = duckSpeed;
             continue;
 
             void ChangePlayerStatus()
             {
                 _whenUserDuck[id.Slot] = whenDuckButton;
-                isOnGround = false;
+                pawn.OnGroundLastTick = false;
             }
 
         }
