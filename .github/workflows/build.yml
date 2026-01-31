@@ -1,0 +1,56 @@
+name: Build the plugin
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+  release:
+    types:
+      - created
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 8.0.x
+      - name: Build
+        run: dotnet build -c Release
+      - name: Create output directory
+        run: |
+          mkdir -p output/cs2-Ddrun-HNS
+          mv ./bin/Release/net8.0/cs2-Ddrun-HNS.dll output/cs2-Ddrun-HNS/
+      - name: Publish artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cs2-Ddrun-HNS-${{ github.sha }}
+          path: output
+
+  release:
+    needs: build
+    permissions: write-all
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: cs2-Ddrun-HNS-${{ github.sha }}
+      - name: Create release assets
+        run: |
+          zip -r cs2-Ddrun-HNS-${{ github.sha }}.zip ./cs2-Ddrun-HNS
+      - name: Upload release asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./cs2-Ddrun-HNS-${{ github.sha }}.zip
+          asset_name: "cs2-Ddrun-HNS-${{ github.event.release.tag_name }}.zip"
+          asset_content_type: application/zip
