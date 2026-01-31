@@ -47,7 +47,7 @@ public class _ : BasePlugin
                 }
             }
 
-            new CCSPlayer_MovementServices(idMove.Handle).DuckSpeed = duckSpeed;
+            idMove.DuckSpeed = duckSpeed;
 
             switch (pawn.OnGroundLastTick)
             {
