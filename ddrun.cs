@@ -60,7 +60,6 @@ public class _ : BasePlugin
                     ChangePlayerStatus();
                     var ddHeight = GiveTrueDdHeight(id);
                     _whenUserStartDdRun[id.Slot] = Server.CurrentTime + SgsTime;
-                    new CCSPlayer_MovementServices(idMove.Handle).Ducking = true;
                     var speedOld = Math.Round(pawn.AbsVelocity.Length2D());
                     Server.NextFrame(() =>
                     {
